@@ -48,6 +48,10 @@ class SmolVLAConfig(PreTrainedConfig):
     # left and right wrist cameras in addition to the top camera.
     empty_cameras: int = 0
 
+    # Dataset action names, auto-populated during training when metadata is available.
+    # Rollout uses this to keep model outputs aligned with real robot joints.
+    action_feature_names: list[str] | None = None
+
     # Converts the joint and gripper values from the standard Aloha space to
     # the space used by the pi internal runtime which was used to train the base model.
     adapt_to_pi_aloha: bool = False
