@@ -18,6 +18,7 @@ from .transforms import (
     ImageTransformsConfig,
     RandomSubsetApply,
     SharpnessJitter,
+    SquarePad,
     make_transform_from_config,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "ImageTransformsConfig",
     "RandomSubsetApply",
     "SharpnessJitter",
+    "SquarePad",
     "make_transform_from_config",
 ]

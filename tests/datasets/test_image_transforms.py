@@ -33,6 +33,7 @@ from lerobot.transforms import (
     ImageTransformsConfig,
     RandomSubsetApply,
     SharpnessJitter,
+    SquarePad,
     make_transform_from_config,
 )
 from lerobot.utils.random_utils import seeded_context
@@ -76,6 +77,63 @@ def test_get_image_transforms_no_transform_max_num_transforms_0(img_tensor_facto
     tf_cfg = ImageTransformsConfig(enable=True, max_num_transforms=0)
     tf_actual = ImageTransforms(tf_cfg)
     torch.testing.assert_close(tf_actual(img_tensor), img_tensor)
+
+
+def test_square_pad_width_larger_than_height():
+    img = torch.ones((3, 2, 4), dtype=torch.float32)
+    padded = SquarePad()(img)
+
+    assert padded.shape == (3, 4, 4)
+    torch.testing.assert_close(padded[:, 1:3, :], img)
+    assert torch.count_nonzero(padded[:, 0, :]) == 0
+    assert torch.count_nonzero(padded[:, 3, :]) == 0
+
+
+def test_square_pad_height_larger_than_width():
+    img = torch.ones((3, 5, 2), dtype=torch.float32)
+    padded = SquarePad()(img)
+
+    assert padded.shape == (3, 5, 5)
+    torch.testing.assert_close(padded[:, :, 1:3], img)
+    assert torch.count_nonzero(padded[:, :, 0]) == 0
+    assert torch.count_nonzero(padded[:, :, 3:]) == 0
+
+
+def test_square_pad_preserves_leading_dimensions():
+    img = torch.ones((2, 4, 3, 5, 2), dtype=torch.uint8)
+    padded = SquarePad()(img)
+
+    assert padded.shape == (2, 4, 3, 5, 5)
+    torch.testing.assert_close(padded[..., 1:3], img)
+    assert torch.count_nonzero(padded[..., 0]) == 0
+    assert torch.count_nonzero(padded[..., 3:]) == 0
+
+
+def test_image_transforms_pad_to_square_without_random_augmentations():
+    img = torch.ones((3, 3, 7), dtype=torch.float32)
+    tf = ImageTransforms(ImageTransformsConfig(pad_to_square=True))
+
+    padded = tf(img)
+
+    assert padded.shape == (3, 7, 7)
+    torch.testing.assert_close(padded[:, 2:5, :], img)
+    assert torch.count_nonzero(padded[:, :2, :]) == 0
+    assert torch.count_nonzero(padded[:, 5:, :]) == 0
+
+
+def test_image_transforms_pad_three_rectangular_cameras_to_square():
+    tf = ImageTransforms(ImageTransformsConfig(pad_to_square=True))
+    cameras = {
+        "left_wrist": torch.ones((3, 240, 320), dtype=torch.float32),
+        "right_wrist": torch.ones((3, 320, 240), dtype=torch.float32),
+        "overhead": torch.ones((3, 480, 640), dtype=torch.float32),
+    }
+
+    padded = {name: tf(image) for name, image in cameras.items()}
+
+    assert padded["left_wrist"].shape == (3, 320, 320)
+    assert padded["right_wrist"].shape == (3, 320, 320)
+    assert padded["overhead"].shape == (3, 640, 640)
 
 
 @pytest.mark.parametrize("min_max", [(0.5, 0.5), (2.0, 2.0)])

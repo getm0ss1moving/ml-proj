@@ -144,6 +144,40 @@ class SharpnessJitter(Transform):
         return self._call_kernel(F.adjust_sharpness, inpt, sharpness_factor=sharpness_factor)
 
 
+class SquarePad(Transform):
+    """Pad image or video tensors with black pixels until height and width match.
+
+    The transform keeps the original content centered and pads only the shorter
+    spatial dimension. It supports the channel-first tensors used by LeRobot
+    datasets, including leading batch or time dimensions: [..., C, H, W].
+    """
+
+    def __init__(self, fill: int | float = 0) -> None:
+        super().__init__()
+        self.fill = fill
+
+    def transform(self, inpt: Any, params: dict[str, Any]) -> Any:
+        if not isinstance(inpt, torch.Tensor):
+            return inpt
+        if inpt.ndim < 3:
+            return inpt
+
+        height, width = inpt.shape[-2:]
+        if height == width:
+            return inpt
+
+        diff = abs(height - width)
+        pad_before = diff // 2
+        pad_after = diff - pad_before
+
+        if height < width:
+            padding = [0, pad_before, 0, pad_after]
+        else:
+            padding = [pad_before, 0, pad_after, 0]
+
+        return F.pad(inpt, padding=padding, fill=self.fill)
+
+
 @dataclass
 class ImageTransformConfig:
     """
@@ -179,6 +213,11 @@ class ImageTransformsConfig:
     # By default, transforms are applied in Torchvision's suggested order (shown below).
     # Set this to True to apply them in a random order.
     random_order: bool = False
+    # Pad each visual observation to a square using black pixels before random augmentations.
+    # This is useful for multi-camera datasets where cameras have rectangular or different resolutions.
+    pad_to_square: bool = False
+    # Fill value used by `pad_to_square`. Keep this at 0 for black padding.
+    square_pad_fill: int | float = 0
     tfs: dict[str, ImageTransformConfig] = field(
         default_factory=lambda: {
             "brightness": ImageTransformConfig(
@@ -218,6 +257,8 @@ class ImageTransformsConfig:
 def make_transform_from_config(cfg: ImageTransformConfig):
     if cfg.type == "SharpnessJitter":
         return SharpnessJitter(**cfg.kwargs)
+    if cfg.type == "SquarePad":
+        return SquarePad(**cfg.kwargs)
 
     transform_cls = getattr(v2, cfg.type, None)
     if isinstance(transform_cls, type) and issubclass(transform_cls, Transform):
@@ -225,7 +266,7 @@ def make_transform_from_config(cfg: ImageTransformConfig):
 
     raise ValueError(
         f"Transform '{cfg.type}' is not valid. It must be a class in "
-        f"torchvision.transforms.v2 or 'SharpnessJitter'."
+        f"torchvision.transforms.v2, 'SharpnessJitter', or 'SquarePad'."
     )
 
 
@@ -246,15 +287,27 @@ class ImageTransforms(Transform):
             self.weights.append(tf_cfg.weight)
 
         n_subset = min(len(self.transforms), cfg.max_num_transforms)
-        if n_subset == 0 or not cfg.enable:
-            self.tf = v2.Identity()
-        else:
-            self.tf = RandomSubsetApply(
+        square_pad = SquarePad(fill=cfg.square_pad_fill) if cfg.pad_to_square else None
+        random_subset = None
+        if n_subset != 0 and cfg.enable:
+            random_subset = RandomSubsetApply(
                 transforms=list(self.transforms.values()),
                 p=self.weights,
                 n_subset=n_subset,
                 random_order=cfg.random_order,
             )
+
+        transforms = []
+        if cfg.pad_to_square:
+            transforms.append(square_pad)
+
+        if random_subset is not None:
+            transforms.append(random_subset)
+
+        if square_pad is None and random_subset is not None:
+            self.tf = random_subset
+        else:
+            self.tf = v2.Compose(transforms) if transforms else v2.Identity()
 
     def forward(self, *inputs: Any) -> Any:
         return self.tf(*inputs)

@@ -14,7 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from lerobot.cameras import CameraConfig
 
 from ..config import RobotConfig
 from ..so_follower import SOFollowerConfig
@@ -27,3 +29,7 @@ class BiSOFollowerConfig(RobotConfig):
 
     left_arm_config: SOFollowerConfig
     right_arm_config: SOFollowerConfig
+    # Optional shared top-level cameras for bimanual setups.
+    # Use this for cameras that are not owned by one arm, or when camera names
+    # should stay unprefixed (for example: left_wrist, right_wrist, overhead).
+    cameras: dict[str, CameraConfig] = field(default_factory=dict)

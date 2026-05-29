@@ -38,6 +38,14 @@ class BiSOFollower(Robot):
     def __init__(self, config: BiSOFollowerConfig):
         super().__init__(config)
         self.config = config
+        self._use_top_level_cameras = bool(config.cameras)
+
+        if self._use_top_level_cameras:
+            left_cameras = config.cameras
+            right_cameras = {}
+        else:
+            left_cameras = config.left_arm_config.cameras
+            right_cameras = config.right_arm_config.cameras
 
         left_arm_config = SOFollowerRobotConfig(
             id=f"{config.id}_left" if config.id else None,
@@ -46,7 +54,7 @@ class BiSOFollower(Robot):
             disable_torque_on_disconnect=config.left_arm_config.disable_torque_on_disconnect,
             max_relative_target=config.left_arm_config.max_relative_target,
             use_degrees=config.left_arm_config.use_degrees,
-            cameras=config.left_arm_config.cameras,
+            cameras=left_cameras,
         )
 
         right_arm_config = SOFollowerRobotConfig(
@@ -56,7 +64,7 @@ class BiSOFollower(Robot):
             disable_torque_on_disconnect=config.right_arm_config.disable_torque_on_disconnect,
             max_relative_target=config.right_arm_config.max_relative_target,
             use_degrees=config.right_arm_config.use_degrees,
-            cameras=config.right_arm_config.cameras,
+            cameras=right_cameras,
         )
 
         self.left_arm = SOFollower(left_arm_config)
@@ -79,6 +87,9 @@ class BiSOFollower(Robot):
     def _cameras_ft(self) -> dict[str, tuple]:
         left_arm_cameras_ft = self.left_arm._cameras_ft
         right_arm_cameras_ft = self.right_arm._cameras_ft
+
+        if self._use_top_level_cameras:
+            return {**left_arm_cameras_ft, **right_arm_cameras_ft}
 
         return {
             **{f"left_{k}": v for k, v in left_arm_cameras_ft.items()},
@@ -124,11 +135,17 @@ class BiSOFollower(Robot):
 
         # Add "left_" prefix
         left_obs = self.left_arm.get_observation()
-        obs_dict.update({f"left_{key}": value for key, value in left_obs.items()})
+        left_cam_keys = set(self.left_arm.cameras) if self._use_top_level_cameras else set()
+        obs_dict.update(
+            {key if key in left_cam_keys else f"left_{key}": value for key, value in left_obs.items()}
+        )
 
         # Add "right_" prefix
         right_obs = self.right_arm.get_observation()
-        obs_dict.update({f"right_{key}": value for key, value in right_obs.items()})
+        right_cam_keys = set(self.right_arm.cameras) if self._use_top_level_cameras else set()
+        obs_dict.update(
+            {key if key in right_cam_keys else f"right_{key}": value for key, value in right_obs.items()}
+        )
 
         return obs_dict
 

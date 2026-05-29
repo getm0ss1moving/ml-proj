@@ -77,8 +77,9 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
     Returns:
         LeRobotDataset | MultiLeRobotDataset
     """
+    image_tf_cfg = cfg.dataset.image_transforms
     image_transforms = (
-        ImageTransforms(cfg.dataset.image_transforms) if cfg.dataset.image_transforms.enable else None
+        ImageTransforms(image_tf_cfg) if image_tf_cfg.enable or image_tf_cfg.pad_to_square else None
     )
 
     if isinstance(cfg.dataset.repo_id, str):

@@ -35,7 +35,7 @@ class ACTConfig(PreTrainedConfig):
               AND/OR
             - The key "observation.environment_state" is required as input.
         - If there are multiple keys beginning with "observation.images." they are treated as multiple camera
-          views. Right now we only support all images having the same shape.
+          views. ACT processes each camera independently, so camera resolutions may differ.
         - May optionally work without an "observation.state" key for the proprioceptive robot state.
         - "action" is required as an output key.
 
