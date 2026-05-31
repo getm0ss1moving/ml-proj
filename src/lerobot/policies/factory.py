@@ -491,7 +491,9 @@ def make_policy(
         features = env_to_policy_features(env_cfg)
 
     cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
-    if not cfg.input_features:
+    if ds_meta is not None and cfg.type == "smolvla":
+        cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
+    elif not cfg.input_features:
         cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
 
     # Store action feature names for relative_exclude_joints support
